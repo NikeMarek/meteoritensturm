@@ -59,7 +59,7 @@
   #stage{ position:relative; width:100%; max-width:420px; aspect-ratio:9/16; max-height:calc(100% - 60px);
     background:#000; border-radius:22px; border:2px solid var(--green-deep); overflow:hidden;
     box-shadow:0 0 0 6px #060b08, 0 10px 40px rgba(0,0,0,0.6);}
-  canvas{ display:block; width:100%; height:100%; }
+  canvas{ display:block; width:100%; height:100%; touch-action:none; }
 
   #hud{ position:absolute; top:0; left:0; right:0; display:flex; justify-content:space-between; align-items:flex-start; padding:10px 12px; pointer-events:none;}
   .lives{ display:flex; gap:4px; flex-wrap:wrap; max-width:70px;}
@@ -232,6 +232,24 @@
     W = rect.width; H = rect.height;
   }
   window.addEventListener('resize', resize);
+
+  /* ================= TOUCH STEERING ================= */
+  let pointerTargetX = null, dragging = false;
+  function pointerXFromEvent(e){
+    const rect = canvas.getBoundingClientRect();
+    return e.clientX - rect.left;
+  }
+  canvas.addEventListener('pointerdown', (e)=>{
+    dragging = true;
+    pointerTargetX = pointerXFromEvent(e);
+    canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove', (e)=>{
+    if(!dragging) return;
+    pointerTargetX = pointerXFromEvent(e);
+  });
+  window.addEventListener('pointerup', ()=>{ dragging = false; });
+  window.addEventListener('pointercancel', ()=>{ dragging = false; });
 
   /* ================= PERSISTENCE ================= */
   const STORAGE_KEY = 'meteoritensturm_save_v3';
@@ -438,6 +456,7 @@
     lives = UPGRADES.lives.apply(state.upg.lives);
     runCoins=0; invulnUntil=0; shieldActive=false; shakeT=0; droneAngle=0; currentZoneKey='belt';
     runKills=0; combo=0; comboMult=1; shootingStar=null; nextShootingStar=4000+Math.random()*4000;
+    pointerTargetX = null; dragging = false;
     updateLivesRow(); document.getElementById('run-coins').textContent='0'; renderBadges(); updateZoneLabel();
   }
 
@@ -635,8 +654,9 @@
     if(newZone !== currentZoneKey){ currentZoneKey = newZone; updateZoneLabel(); }
     const zoneCfg = ZONES[currentZoneKey];
 
-    const ampl = W*0.30;
-    rocket.x = W/2 + Math.sin(elapsed/1000*1.1)*ampl;
+    if(pointerTargetX !== null){
+      rocket.x += (pointerTargetX - rocket.x) * Math.min(1, dt*16);
+    }
     rocket.x = Math.max(rocket.r+6, Math.min(W-rocket.r-6, rocket.x));
     rocket.trail.push({x:rocket.x,y:rocket.y+16,life:0.35,maxLife:0.35});
     for(let i=rocket.trail.length-1;i>=0;i--){ rocket.trail[i].life-=dt; if(rocket.trail[i].life<=0) rocket.trail.splice(i,1); }
